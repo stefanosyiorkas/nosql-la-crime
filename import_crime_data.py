@@ -1,6 +1,7 @@
 import pandas as pd
-from pymongo import MongoClient
+from pymongo import MongoClient, errors
 import os
+from tqdm import tqdm  # Για progress tracking
 
 # Σύνδεση με MongoDB
 MONGO_URI = os.getenv("DATABASE_URL", "mongodb://admin:secret@localhost:27017/nosql-la-crime?authSource=admin")
@@ -20,8 +21,11 @@ db.upvotes.delete_many({})
 crimes = []
 victims = []
 weapons = []
+
 print("📝 Εισαγωγή δεδομένων στη βάση...")
-for _, row in df.iterrows():
+
+# Προσθήκη progress tracking με tqdm
+for index, row in tqdm(df.iterrows(), total=len(df), desc="Εισαγωγή αναφορών εγκλήματος"):
     crime_doc = {
         "DR_NO": row["DR_NO"],
         "date_reported": row["Date Rptd"],
@@ -37,7 +41,11 @@ for _, row in df.iterrows():
         }
     }
     
-    crime_id = db.crimes.insert_one(crime_doc).inserted_id
+    try:
+        crime_id = db.crimes.insert_one(crime_doc).inserted_id
+    except errors.DuplicateKeyError:
+        print(f"⚠️ Παράλειψη διπλότυπης καταχώρησης: DR_NO {row['DR_NO']}")
+        continue
 
     if not pd.isna(row["Vict Age"]) or not pd.isna(row["Vict Sex"]) or not pd.isna(row["Vict Descent"]):
         victim_doc = {
